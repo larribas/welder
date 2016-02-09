@@ -1,0 +1,20 @@
+language: ruby
+rvm:
+  - 1.9.3
+  - 2.0
+  - 2.1
+  - 2.2
+  - 2.3.0
+  - rbx-2
+  - jruby-9000
+  - ruby-head
+  - jruby-head
+sudo: false
+cache: bundler
+install:
+  - bundle install --retry=2
+script:
+  - bundle exec rspec
+addons:
+  code_climate:
+    repo_token: 476435b952955883b3c784cbbe41aae8ba578784ed9ba24a56898882182c86f3
