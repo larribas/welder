@@ -1,0 +1,3 @@
+module Welder
+
+end
