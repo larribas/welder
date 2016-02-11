@@ -1,0 +1,1 @@
+require 'welder/pipe'
