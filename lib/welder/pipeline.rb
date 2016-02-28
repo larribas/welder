@@ -1,3 +1,5 @@
+require 'welder/support/callable_handler'
+
 module Welder
   # A wrapper around a sequence of callables (i.e. anything that responds to a
   # single-argument 'call' method, which includes procs, blocks and other
@@ -6,74 +8,85 @@ module Welder
   # Pipelines are immutable. There are mechanisms to create more complex
   # pipelines out of existing ones, but they will always create a new pipeline
   class Pipeline
-    # A domain error indicating that there was an attempt to create a pipeline
-    # out of a non-callable (e.g. a string)
-    CallableExpectedError = Class.new(Exception)
+    include Support::CallableHandler
 
-    # Creates a new pipe out of a sequence of callables. If a block is given,
-    # it is executed as the last step of the pipeline
+    # Creates a new pipeline out of a sequence of callables. If a block is
+    # given, it is executed as the last step of the pipeline.
+    # It also accepts valves, with act as witnesses of the steps the pipeline
+    # goes through
     #
-    # @param lambdas [Array<#call>] Expanded array of callables
+    # @param lambdas [Array<#call>] Array of callables accepting 1 argument
+    # @param valves [Array<#call>] Array of callables accepting 3 arguments
     # @param block [Block] A block to execute as the last step in the pipeline
     #
     # @raise [CallableExpectedError] When trying to create a pipeline
     #   out of a non-callable
     #
+    # @example Create an empty pipeline (with no steps)
+    #   square_and_double = Welder::Pipeline.new
+    #
     # @example Create a pipeline from an anonymous function
     #   square = Welder::Pipeline.new(->(x){ x ** 2 })
     #
-    # @example Create a pipeline from a module method and a block
-    #   square_and_double = Welder::Pipeline.new(->(x){ x ** 2 }) { |x| x * 2 }
-    def initialize(*lambdas, &block)
-      callable!(*lambdas)
+    # @example Create a pipeline from a block
+    #   square_and_double = Welder::Pipeline.new { |x| x ** 2 }
+    def initialize(*lambdas, valves: nil, &block)
+      callable!(*lambdas, *valves)
 
       @pipes = [*lambdas]
       @pipes << block if block
+
+      @valves = [*valves]
     end
 
-    # Apply the sequence of functions to a particular input
+    # Apply the sequence of functions to a particular input. Any valves
+    # present in the pipeline are called as a side effect
     #
     # @param input [*] The input for the first element of the pipeline
+    # @param valves [Array<#call>] An array of valves to be called at every
+    #   step of the pipeline
     #
     # @return [*] The output resulting of passing the input through the whole
     #   pipeline
-    def call(input)
-      @pipes.reduce(input) { |a, e| e.call(a) }
+    def call(input, valves = [])
+      valves = @valves.concat(valves)
+
+      @pipes.reduce(input) do |a, e|
+        if e.is_a?(Pipeline)
+          e.call(a, valves)
+        else
+          e.call(a).tap do |output|
+            valves.each { |valve| valve.call(a, e, output) }
+          end
+        end
+      end
     end
 
-    # Compose a pipeline with another one. This method does not modify
-    # existing pipelines. Instead, it creates a new pipeline composed
+    # Compose a pipeline with another one (or a callable). This method does not
+    # modify existing pipelines. Instead, it creates a new pipeline composed
     # of the previous two
     #
-    # @param other [Welder::Pipeline] the pipeline to be executed after
-    #   the current one
+    # @param other [#call] The callable to add as the last step of the
+    #   pipeline, which has to accept 1 argument
     #
     # @raise [CallableExpectedError] When trying to create a pipeline
     #   out of non-callables
     #
-    # @return [Welder::Pipeline] a new pipeline composed of the current one and 'other',
-    #   in that order
+    # @return [Welder::Pipeline] a new pipeline composed of the current
+    #   one and 'other', in that order
     def |(other)
       self.class.new(self, other)
     end
 
-    private
-
-    # Assert that a series of values are callable (respond to call)
+    # Create a new pipeline that keeps all the steps in the current one,
+    # but adds a valve overseeing the process. The valve will get called
+    # at every stage, as a side effect, but it will never modify the final
+    # outcome of the pipeline
     #
-    # @param lambdas [Array<*>] expanded array of values to check
-    #
-    # @raise [CallableExpectedError] If one or more of the values are
-    #   not callable
-    def callable!(*lambdas)
-      non_callable = lambdas.reject { |lambda| lambda.respond_to?(:call) }
-      unless non_callable.empty?
-        raise(
-          CallableExpectedError,
-          "Expected #{non_callable.map(&:to_s).join(', ')} " \
-          "to respond to 'call(input)'"
-        )
-      end
+    # @param other [#call] The callable to invoke at every step of the
+    #   pipeline. It must accept 3 arguments: (input, lambda, output)
+    def -(other)
+      self.class.new(self, valves: [*other])
     end
   end
 end
