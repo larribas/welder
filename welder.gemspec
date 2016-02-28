@@ -19,6 +19,7 @@ Gem::Specification.new do |gem|
 
   gem.files        = Dir['{lib}/**/*.rb', 'LICENSE', '*.md']
   gem.require_path = 'lib'
+  gem.required_ruby_version = '>= 2.0.0'
 
-  gem.add_development_dependency 'bundler'
+  gem.add_development_dependency 'bundler', '~> 1'
 end
