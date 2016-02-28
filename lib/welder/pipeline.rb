@@ -91,7 +91,15 @@ module Welder
   end
 end
 
+WELDER_SAVED_PIPE_METHODS = {}
 [Object, Fixnum, TrueClass, FalseClass].each do |klass|
+
+  WELDER_SAVED_PIPE_METHODS[klass] = begin
+    klass.instance_method(:|)
+  rescue NameError
+    nil
+  end
+
   # The bitwise OR operator is overloaded to force the creation and evaluation
   # of a pipeline whose first element is not a pipeline, but whose second and
   # further are.
@@ -104,13 +112,13 @@ end
   #
   # @return [*] an evaluated pipeline (see conditions above) or the expected
   #   behavior for arbitrary objects
-  klass.class_eval do
+  klass.class_eval <<EOF
     def |(other)
       if other.is_a?(Welder::Pipeline) && !is_a?(Welder::Pipeline)
         return other.call(self)
       end
 
-      super
+      WELDER_SAVED_PIPE_METHODS[#{klass}].bind(self).call(other) if WELDER_SAVED_PIPE_METHODS[#{klass}]
     end
-  end
+EOF
 end

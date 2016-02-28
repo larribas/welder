@@ -75,6 +75,11 @@ describe Welder::Pipeline do
       expect(pipeline.call('hello world')).to eq('"(hello world)"!!')
     end
 
+    it 'does not break the pipe operator\'s behavior' do
+      expect(3 | 4).to eq(7)
+      expect(true | false).to eq(true)
+    end
+
     it 'executes a pipeline when the first element is a literal' do
       [
         'hello world',
