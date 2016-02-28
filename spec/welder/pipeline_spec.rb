@@ -1,19 +1,19 @@
 require 'spec_helper'
-require 'welder/pipe'
+require 'welder/pipeline'
 
-describe Welder::Pipe do
+describe Welder::Pipeline do
   it 'can be created empty, acting as the identity function' do
-    pipeline = Welder::Pipe.new
+    pipeline = Welder::Pipeline.new
     expect(pipeline.call(2)).to eq(2)
   end
 
   it 'can be created from a block' do
-    pipe = Welder::Pipe.new { |input| input * 2 }
+    pipe = Welder::Pipeline.new { |input| input * 2 }
     expect(pipe.call(2)).to eq(4)
   end
 
   it 'can be created from an anonymous function' do
-    pipe = Welder::Pipe.new(->(input) { input * 2 })
+    pipe = Welder::Pipeline.new(->(input) { input * 2 })
     expect(pipe.call(2)).to eq(4)
   end
 
@@ -22,7 +22,7 @@ describe Welder::Pipe do
       input * 2
     end
 
-    pipe = Welder::Pipe.new(method(:some_function))
+    pipe = Welder::Pipeline.new(method(:some_function))
     expect(pipe.call(2)).to eq(4)
   end
 
@@ -33,7 +33,7 @@ describe Welder::Pipe do
       end
     end
 
-    pipe = Welder::Pipe.new(CallableModule)
+    pipe = Welder::Pipeline.new(CallableModule)
     expect(pipe.call(2)).to eq(4)
   end
 
@@ -48,7 +48,7 @@ describe Welder::Pipe do
       end
     end
 
-    pipe = Welder::Pipe.new(CallableClass.new(2))
+    pipe = Welder::Pipeline.new(CallableClass.new(2))
     expect(pipe.call(2)).to eq(4)
   end
 
@@ -57,27 +57,36 @@ describe Welder::Pipe do
       [:invalid, :parameters],
       [->(_) { 'valid' }, 'invalid']
     ].each do |params|
-      expect { Welder::Pipe.new(*params) }.to(
-        raise_error(Welder::Pipe::CallableExpectedError)
+      expect { Welder::Pipeline.new(*params) }.to(
+        raise_error(Welder::Pipeline::CallableExpectedError)
       )
     end
   end
 
   context 'when composing pipes' do
-    let(:parenthesize) { Welder::Pipe.new(->(input) { "(#{input})" }) }
-    let(:quote)        { Welder::Pipe.new(->(input) { "\"#{input}\"" }) }
-    let(:shout)        { Welder::Pipe.new(->(input) { "#{input}!!" }) }
+    let(:parenthesize) { Welder::Pipeline.new(->(input) { "(#{input})" }) }
+    let(:quote)        { Welder::Pipeline.new(->(input) { "\"#{input}\"" }) }
+    let(:shout)        { Welder::Pipeline.new(->(input) { "#{input}!!" }) }
 
-    it 'can compose a series of pipes together using the unix pipe operator' do
+    it 'composes a series of pipelines using the unix pipe operator' do
       pipeline = parenthesize | quote | shout
 
-      expect(pipeline).to be_a(Welder::Pipe)
+      expect(pipeline).to be_a(Welder::Pipeline)
       expect(pipeline.call('hello world')).to eq('"(hello world)"!!')
     end
 
-    it 'can automatically execute a pipe when the first element is a literal' do
-      result = 'hello world' | parenthesize
-      expect(result).to eq('(hello world)')
+    it 'executes a pipeline when the first element is a literal' do
+      [
+          'hello world',
+          2,
+          2.5,
+          true,
+          Class.new,      # classes and modules
+          Class.new.new,  # class instances
+      ].each do |literal|
+        expect(literal | parenthesize).to eq(parenthesize.call(literal))
+      end
     end
   end
+
 end

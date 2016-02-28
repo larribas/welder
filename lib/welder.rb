@@ -2,3 +2,6 @@
 # and offers a few shortcuts to the main Welder entities
 module Welder
 end
+
+require 'welder/pipeline'
+require 'welder/valve'
